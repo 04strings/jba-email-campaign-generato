@@ -1,0 +1,5 @@
+{
+  "installCommand": "npm install --registry=https://registry.npmjs.org/ --prefer-online --no-audit --no-fund",
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist"
+}
