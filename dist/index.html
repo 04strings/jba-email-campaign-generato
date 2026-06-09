@@ -200,7 +200,8 @@
         meetup: 'Past 3 Used Meetups from History'
       };
       if(!items.length){
-        return `<div class="panel"><h2>${esc(titles[sectionId] || 'Past 3 Used from History')}</h2><div class="history-item" style="border-style:dashed;color:var(--muted);">No saved history yet.</div></div>`;
+        const kajabiButton = sectionId === 'challenge' ? `<div class="panel" style="margin-top:-10px;"><a class="btn primary" href="https://app.kajabi.com/admin/products/2148433202" target="_blank" rel="noopener noreferrer" style="display:inline-block;text-decoration:none;">KAJABI - PREVIOUS CHALLENGES</a></div>` : '';
+        return `<div class="panel"><h2>${esc(titles[sectionId] || 'Past 3 Used from History')}</h2><div class="history-item" style="border-style:dashed;color:var(--muted);">No saved history yet.</div></div>${kajabiButton}`;
       }
       function card(entry){
         if(sectionId === 'challenge'){
@@ -217,7 +218,8 @@
         }
         return '';
       }
-      return `<div class="panel"><h2>${esc(titles[sectionId] || 'Past 3 Used from History')}</h2><p>Use this as a quick reminder so you do not repeat last month’s picks.</p><div class="mini-grid">${items.map(card).join('')}</div></div>`;
+      const kajabiButton = sectionId === 'challenge' ? `<div class="panel" style="margin-top:-10px;"><a class="btn primary" href="https://app.kajabi.com/admin/products/2148433202" target="_blank" rel="noopener noreferrer" style="display:inline-block;text-decoration:none;">KAJABI - PREVIOUS CHALLENGES</a></div>` : '';
+      return `<div class="panel"><h2>${esc(titles[sectionId] || 'Past 3 Used from History')}</h2><p>Use this as a quick reminder so you do not repeat last month’s picks.</p><div class="mini-grid">${items.map(card).join('')}</div></div>${kajabiButton}`;
     }
 
     function renderHistoryPanel(){
