@@ -23,3 +23,6 @@ Important:
 - Keep `index.html`, `api/generate.js`, `package.json`, `.npmrc`, and `vercel.json`.
 - In Vercel, make sure `OPENAI_API_KEY` is set.
 - Redeploy without build cache.
+
+
+Vercel note: this static version builds by copying index.html into dist because the project output directory is dist.

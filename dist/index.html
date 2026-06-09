@@ -1,0 +1,296 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>JBA Email Campaign Generator</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg:#0a0a0d; --surface:#111116; --card:#16161d; --input:#1e1e27;
+      --border:rgba(255,255,255,.08); --focus:rgba(245,158,11,.45);
+      --accent:#f59e0b; --accent-soft:rgba(245,158,11,.1); --accent-text:#fbbf24;
+      --text:#eeeef2; --muted:#7b7b8f; --dim:#2e2e3e; --success:#10b981; --danger:#f87171;
+    }
+    * { box-sizing: border-box; }
+    body { margin:0; background:var(--bg); color:var(--text); font-family:'Syne', system-ui, sans-serif; }
+    .wrap { min-height:100vh; padding:32px 24px; max-width:1180px; margin:0 auto; }
+    .mono { font-family:'DM Mono', monospace; }
+    .eyebrow { display:flex; align-items:center; gap:8px; margin-bottom:8px; color:var(--accent); font-size:10px; letter-spacing:.12em; text-transform:uppercase; }
+    .dot { width:7px; height:7px; border-radius:50%; background:var(--accent); display:inline-block; }
+    h1 { font-size:26px; margin:0; line-height:1.2; }
+    h2 { font-size:19px; margin:0 0 6px; }
+    p { color:var(--muted); font-size:13px; line-height:1.6; }
+    .nav { display:flex; gap:6px; flex-wrap:wrap; margin:24px 0; }
+    button { font-family:'Syne', system-ui, sans-serif; }
+    .pill { padding:7px 14px; border-radius:8px; cursor:pointer; border:1px solid var(--border); background:transparent; color:var(--muted); font-size:13px; font-weight:500; }
+    .pill.active { border-color:var(--accent); background:var(--accent-soft); color:var(--accent-text); }
+    .panel { background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:22px; margin-bottom:20px; }
+    .grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+    .wide { grid-column:span 2; }
+    label { display:block; font-family:'DM Mono', monospace; font-size:10px; font-weight:500; color:var(--muted); margin-bottom:5px; text-transform:uppercase; letter-spacing:.08em; }
+    input, select, textarea { width:100%; padding:10px 14px; background:var(--input); border:1px solid var(--border); border-radius:8px; color:var(--text); font-size:13px; outline:none; font-family:'Syne', system-ui, sans-serif; }
+    input:focus, select:focus, textarea:focus { border-color:var(--focus); }
+    input[type=date] { color-scheme: dark; }
+    textarea { min-height:220px; resize:vertical; font-family:'DM Mono', monospace; font-size:12px; line-height:1.8; }
+    .freebie-box { grid-column:span 2; background:var(--card); border:1px solid var(--border); border-radius:12px; padding:14px; }
+    .freebie-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:8px; margin-top:12px; }
+    .freebie-btn { text-align:left; padding:9px 10px; border-radius:8px; cursor:pointer; border:1px solid var(--border); background:var(--surface); color:var(--text); font-size:12px; font-weight:600; }
+    .freebie-btn.active { border-color:var(--accent); background:var(--accent-soft); color:var(--accent-text); }
+    .url { margin-top:3px; color:var(--muted); font-size:10px; font-weight:400; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .row { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; }
+    .btn { padding:10px 16px; border-radius:8px; border:1px solid var(--border); background:var(--surface); color:var(--text); font-size:13px; cursor:pointer; }
+    .btn.primary { border:none; background:var(--accent); color:#000; font-weight:700; padding:11px 22px; }
+    .btn.ghost { background:transparent; color:var(--muted); }
+    .btn.danger { background:transparent; color:var(--danger); }
+    .error { color:var(--danger); font-size:12px; }
+    .steps { display:flex; justify-content:center; gap:7px; margin-top:28px; }
+    .step-dot { width:6px; height:6px; border-radius:3px; background:var(--dim); cursor:pointer; transition:.2s; }
+    .step-dot.active { width:20px; background:var(--accent); }
+    .history-item, .output-card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:14px; margin-bottom:10px; }
+    .history-item:first-child { border-color:var(--accent); }
+    .mini-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:8px; font-size:12px; line-height:1.55; }
+    .mini-card { padding:10px; border-radius:8px; background:var(--surface); overflow:hidden; }
+    .output-head { display:flex; align-items:center; justify-content:space-between; gap:10px; cursor:pointer; }
+    .badge { font-family:'DM Mono', monospace; font-size:9px; padding:2px 8px; border-radius:20px; border:1px solid rgba(245,158,11,.25); background:var(--accent-soft); color:var(--accent-text); }
+    .output-body { margin-top:12px; border-top:1px solid var(--border); padding-top:12px; display:none; }
+    .output-card.open .output-body { display:block; }
+    .subject-list { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px; }
+    .subject-choice { padding:5px 11px; border-radius:20px; font-size:11px; cursor:pointer; border:1px solid var(--border); background:transparent; color:var(--muted); }
+    .subject-choice.active { border-color:var(--accent); background:var(--accent-soft); color:var(--accent-text); }
+    .progress { max-width:480px; margin:18vh auto 0; text-align:center; }
+    .meter { height:3px; background:var(--border); border-radius:2px; overflow:hidden; margin:28px 0; }
+    .meter > div { height:100%; width:20%; background:var(--accent); transition:.3s; }
+    .note { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:12px 16px; font-size:12px; line-height:1.7; color:var(--muted); margin-bottom:22px; }
+    .hidden { display:none !important; }
+    @media (max-width:720px){ .grid{grid-template-columns:1fr;} .wide,.freebie-box{grid-column:span 1;} .wrap{padding:24px 16px;} }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+
+  <script>
+    const CURRENCY = null;
+    const HISTORY_KEY = 'jba-email-campaign-history-v1';
+    const HISTORY_LIMIT = 60;
+
+    const FREEBIES = [
+      { name: 'Top 50', url: 'https://s3.amazonaws.com/kajabi-storefronts-production/file-uploads/sites/2147954607/downloads/481f6d6-572-11fa-edde-12a14db2844_Jayme_s_Favorite_Basslines_Licks.pdf' },
+      { name: 'Practice Toolkit', url: 'https://www.jaymelewis.com/jaymes-free-practice-toolkit' },
+      { name: 'Arpeggio Playbook', url: 'https://www.jaymelewis.com/arpeggio-playbook' },
+      { name: 'Bassics 101', url: 'https://www.jaymelewis.com/thebassics101' },
+      { name: 'Reading Cheat Sheet', url: 'https://s3.amazonaws.com/kajabi-storefronts-production/file-uploads/sites/2147954607/downloads/7cdde6-62c1-032-0428-bcdf45a5b5_Sheet_Happens.pdf' },
+      { name: 'Fretboard Fast-Track', url: 'https://www.jaymelewis.com/jayme-s-free-fretboard-fast-track' },
+      { name: '30 Free Lessons', url: 'https://www.jaymelewis.com/blog' },
+      { name: 'Tone Guide', url: 'https://s3.amazonaws.com/kajabi-storefronts-production/file-uploads/sites/2147954607/themes/2160539597/downloads/505386c-fca-461-c3c3-4ad0c80f1ba_Jayme_s_Tone_Guide.pdf' },
+      { name: 'Must-Have Bass Gear', url: 'https://www.jaymelewis.com/blog/jayme-s-gear-recommendations' },
+      { name: 'Ear Training', url: 'https://s3.amazonaws.com/kajabi-storefronts-production/file-uploads/sites/2147954607/downloads/6070226-a675-fb7-8fd-e2556fba3b8_Jayme_s_Ear_Training_Guide.pdf' },
+      { name: 'How to Groove with Drummer', url: 'https://s3.amazonaws.com/kajabi-storefronts-production/file-uploads/sites/2147954607/downloads/c670a01-245-60b-38c-bb088c2e8151_Listen_to_your_Drummer.pdf' }
+    ];
+
+    const SECTIONS = [
+      { id:'challenge', label:'Monthly Challenge', icon:'🏆', fields:[
+        { id:'challengeType', label:'Challenge Type', type:'select', options:['STUDIO','TECHNICAL'] },
+        { id:'challengeTopic', label:'Quick Description of Challenge', ph:'e.g. Walking Bass Lines' },
+        { id:'lessonLocation', label:'Lesson Location / Course Name', ph:'e.g. Groove Fundamentals', wide:true },
+        { id:'courseLink', label:'Link to Lesson from Challenge', ph:'https://app.kajabi.com/...', wide:true },
+        { id:'challengeStart', label:'Challenge Start Date', type:'date' },
+        { id:'challengeEnd', label:'Challenge End Date', type:'date' },
+        { id:'tip1', label:'Beginner Tip', ph:'e.g. Focus on keeping a steady tempo first', wide:true },
+        { id:'tip2', label:'Intermediate Tip', ph:'e.g. Add some walking between roots', wide:true },
+        { id:'tip3', label:'Advanced Tip', ph:'e.g. Try adding chromatic approach notes', wide:true }
+      ]},
+      { id:'lesson', label:'New Lesson', icon:'📚', fields:[
+        { id:'lessonTopic', label:'New Lesson Description', ph:'e.g. Slap Bass Fundamentals', wide:true },
+        { id:'lessonLink', label:'New Lesson URL', ph:'https://www.jaymelewis.com/...', wide:true }
+      ]},
+      { id:'freebie', label:'Freebie', icon:'🎁', fields:[
+        { id:'freebieTopic', label:'Freebie Name or Description', ph:'e.g. Practice Toolkit', wide:true },
+        { id:'freebieLink', label:'Freebie URL', ph:'https://www.jaymelewis.com/...', wide:true }
+      ]},
+      { id:'meetup', label:'Meetup', icon:'📅', fields:[
+        { id:'meetupDate', label:'Next Meetup Date', type:'date' },
+        { id:'meetupTime', label:'Meetup Time (PT)', ph:'e.g. 2:00 PM' }
+      ]},
+      { id:'history', label:'History', icon:'🕘', fields:[] }
+    ];
+
+    const AI_STEPS = [
+      { id:'challenge_email', label:'Challenge Email', emoji:'🏆' },
+      { id:'lesson_email', label:'New Lesson Email', emoji:'📚' },
+      { id:'freebie_email', label:'Freebie Email', emoji:'🎁' },
+      { id:'kajabi_body', label:'Kajabi Library Body', emoji:'📋' },
+      { id:'ann_challenge', label:'New Challenge Announcement', emoji:'🎉' },
+      { id:'ann_meetup', label:'Live Meetup Announcement', emoji:'👥' },
+      { id:'ann_lesson', label:'New Lesson Announcement', emoji:'🎸' },
+      { id:'ann_reaction', label:'Reaction Video Announcement', emoji:'🎥' }
+    ];
+
+    const ALL_FIELDS = SECTIONS.filter(s => s.id !== 'history').flatMap(s => s.fields);
+    const app = document.getElementById('app');
+    let state = { step:1, active:'challenge', form:{}, outputs:[], history:loadHistory(), openOutput:null, saved:false };
+
+    function esc(v){ return String(v ?? '').replace(/[&<>'"]/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[ch])); }
+    function clean(v){ return String(v || '').trim(); }
+    function loadHistory(){ try { const val = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]'); return Array.isArray(val) ? val : []; } catch { return []; } }
+    function saveHistoryList(list){ state.history = list; localStorage.setItem(HISTORY_KEY, JSON.stringify(list)); }
+    function fmtDate(value){ if(!value) return '—'; const d = new Date(value + 'T00:00:00'); return isNaN(d) ? value : d.toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'}); }
+    function fmtDateTime(value){ if(!value) return '—'; const d = new Date(value); return isNaN(d) ? value : d.toLocaleString(undefined,{month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'}); }
+    function updateForm(id, val){ state.form[id] = val; }
+    function setState(patch){ state = { ...state, ...patch }; render(); }
+
+    function shell(inner){ return `
+      <div class="wrap">
+        <div class="eyebrow mono"><span class="dot"></span> Jayme's Bass Academy</div>
+        <h1>Email Campaign Generator</h1>
+        <p>Fill in your info below — get 8 ready-to-use emails & Kajabi announcements.</p>
+        ${inner}
+      </div>`; }
+
+    function nav(){ return `<div class="nav">${SECTIONS.map(s => `<button class="pill ${state.active===s.id?'active':''}" data-nav="${s.id}">${s.icon} ${s.label}</button>`).join('')}</div>`; }
+
+    function freebieLibrary(){ return `
+      <div class="freebie-box">
+        <label>Choose from saved freebies</label>
+        <select id="freebieSelect"><option value="">Pick a freebie...</option>${FREEBIES.map(f => `<option value="${esc(f.name)}" ${state.form.freebieTopic===f.name?'selected':''}>${esc(f.name)}</option>`).join('')}</select>
+        <div class="freebie-grid">${FREEBIES.map(f => {
+          const active = state.form.freebieTopic === f.name && state.form.freebieLink === f.url;
+          return `<button class="freebie-btn ${active?'active':''}" data-freebie="${esc(f.name)}">${esc(f.name)}<div class="url">${esc(f.url)}</div></button>`;
+        }).join('')}</div>
+      </div>`; }
+
+    function formField(f){
+      const value = state.form[f.id] || '';
+      const cls = f.wide ? 'wide' : '';
+      if(f.type === 'select'){
+        return `<div class="${cls}"><label>${esc(f.label)}</label><select data-field="${f.id}"><option value="">Select one...</option>${f.options.map(o=>`<option value="${esc(o)}" ${value===o?'selected':''}>${esc(o)}</option>`).join('')}</select></div>`;
+      }
+      if(f.type === 'date'){
+        return `<div class="${cls}"><label>${esc(f.label)}</label><input type="date" value="${esc(value)}" data-field="${f.id}"></div>`;
+      }
+      return `<div class="${cls}"><label>${esc(f.label)}</label><input type="text" value="${esc(value)}" placeholder="${esc(f.ph||'')}" data-field="${f.id}"></div>`;
+    }
+
+    function renderForm(){
+      const idx = SECTIONS.findIndex(s => s.id === state.active);
+      const section = SECTIONS[idx] || SECTIONS[0];
+      const err = state.err ? `<span class="error">${esc(state.err)}</span>` : '';
+      const content = section.id === 'history' ? renderHistoryPanel() : `
+        <div class="panel"><div class="grid">${section.id==='freebie' ? freebieLibrary() : ''}${section.fields.map(formField).join('')}</div></div>`;
+      return shell(`${nav()}${content}
+        <div class="row">
+          <div>
+            ${idx>0 ? `<button class="btn ghost" id="backBtn">← Back</button>` : ''}
+            ${idx<SECTIONS.length-1 ? `<button class="btn" id="nextBtn">Next: ${SECTIONS[idx+1].icon} ${SECTIONS[idx+1].label} →</button>` : ''}
+          </div>
+          ${section.id !== 'history' ? `<div class="row">${err}<button class="btn primary" id="generateBtn">⚡ Generate All 8 Outputs</button></div>` : ''}
+        </div>
+        <div class="steps">${SECTIONS.map(s => `<div class="step-dot ${state.active===s.id?'active':''}" data-nav="${s.id}"></div>`).join('')}</div>`);
+    }
+
+    function renderHistoryPanel(){
+      if(!state.history.length){
+        return `<div class="panel"><div class="row"><div><h2>Previous Export History</h2><p>Every CSV download is saved here so you can see the last challenge, lesson, freebie, and meetup before scheduling the next month.</p></div></div><div class="history-item" style="border-style:dashed;color:var(--muted);">No exports saved yet. Generate a campaign and click “Download CSV + Save History” to start tracking what you used.</div></div>`;
+      }
+      return `<div class="panel">
+        <div class="row" style="margin-bottom:16px;"><div><h2>Previous Export History</h2><p>Every CSV download is saved here so you can avoid repeating the same challenge, lesson, freebie, or meetup month-to-month.</p></div><button class="btn danger" id="clearHistory">Clear History</button></div>
+        ${state.history.map((entry,i)=>`<div class="history-item">
+          <div class="row" style="margin-bottom:10px;"><div><div class="mono" style="font-size:10px;color:${i===0?'var(--accent-text)':'var(--muted)'};text-transform:uppercase;letter-spacing:.08em;">${i===0?'Most recent export':'Saved export'} · ${esc(fmtDateTime(entry.exportedAt))}</div><div style="font-size:14px;font-weight:700;margin-top:4px;">${esc(entry.challengeType||'Challenge')}: ${esc(entry.challengeTopic||'—')}</div></div><div><button class="btn" data-load-history="${esc(entry.id)}">Load Into Form</button> <button class="btn ghost" data-delete-history="${esc(entry.id)}">Delete</button></div></div>
+          <div class="mini-grid">
+            <div class="mini-card"><label>Challenge</label><div>${esc(entry.challengeType||'—')} · ${esc(entry.challengeTopic||'—')}</div><div class="url">${esc(fmtDate(entry.challengeStart))} → ${esc(fmtDate(entry.challengeEnd))}</div></div>
+            <div class="mini-card"><label>Lesson</label><div>${esc(entry.lessonTopic || entry.lessonLocation || '—')}</div><div class="url">${esc(entry.lessonLink || entry.courseLink || '—')}</div></div>
+            <div class="mini-card"><label>Freebie</label><div>${esc(entry.freebieTopic||'—')}</div><div class="url">${esc(entry.freebieLink||'—')}</div></div>
+            <div class="mini-card"><label>Meetup</label><div>${esc(fmtDate(entry.meetupDate))}</div><div class="url">${esc(entry.meetupTime||'—')} PT</div></div>
+          </div>
+        </div>`).join('')}
+      </div>`;
+    }
+
+    function renderProgress(){
+      return `<div class="wrap"><div class="progress"><div style="width:58px;height:58px;border-radius:50%;background:var(--accent-soft);border:2px solid var(--accent);display:flex;align-items:center;justify-content:center;font-size:26px;margin:0 auto 24px;">⚡</div><h2>Writing your emails...</h2><p>${esc(state.progressMsg || 'Writing all 8 outputs with one secure OpenAI API call...')}</p><div class="meter"><div style="width:${Math.max(12,state.progress||12)}%"></div></div><p class="mono" style="font-size:11px;color:var(--dim);">One secure OpenAI API call for all 8 outputs...</p></div></div>`;
+    }
+
+    function renderOutputs(){
+      const emailOutputs = state.outputs.slice(0,3);
+      const annOutputs = state.outputs.slice(3);
+      return `<div class="wrap"><div class="row" style="margin-bottom:22px;"><div><div class="eyebrow mono" style="color:var(--success);"><span class="dot" style="background:var(--success);"></span> 8 outputs ready</div><h2>Your Emails & Announcements</h2><p>All editable. Click any card to expand, copy, and paste into Kajabi.</p></div><div><button class="btn" id="downloadCsv">↓ Download CSV + Save History</button> <button class="btn ${state.saved?'':'ghost'}" id="saveHist">${state.saved?'✓ Saved':'Save to History'}</button> <button class="btn ghost" id="resetBtn">Edit & Regenerate</button></div></div><div class="note"><b style="color:var(--text);">Getting into Kajabi:</b> <span style="color:var(--accent-text);">Emails</span> → Marketing → Emails → Broadcasts → Create Broadcast → paste Subject + Body. <span style="color:var(--accent-text);">Announcements</span> → paste into Community posts or Library lesson pages.</div><div class="mono" style="font-size:10px;color:var(--muted);letter-spacing:.09em;text-transform:uppercase;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--border);">⚡ AI-Generated Emails — send to subscribers</div>${emailOutputs.map(outputCard).join('')}<div class="mono" style="font-size:10px;color:var(--muted);letter-spacing:.09em;text-transform:uppercase;margin:22px 0 10px;padding-bottom:8px;border-bottom:1px solid var(--border);">⚡ AI-Generated Announcements & Posts</div>${annOutputs.map(outputCard).join('')}</div>`;
+    }
+
+    function outputCard(o){
+      const open = state.openOutput === o.id;
+      const subjects = Array.isArray(o.subjects) ? o.subjects : [o.subject || ''];
+      return `<div class="output-card ${open?'open':''}" data-output-card="${esc(o.id)}"><div class="output-head"><div><span style="font-size:17px;">${esc(o.emoji||'')}</span> <b>${esc(o.name||o.id)}</b> <span class="badge">${esc(o.badge||'AI')}</span></div><span style="color:var(--muted);font-size:11px;">${open?'▲':'▼'}</span></div><div class="output-body"><label>Subject Line</label><div class="subject-list">${subjects.map((s,i)=>`<button class="subject-choice ${(o.subject||'')===s?'active':''}" data-subject="${esc(o.id)}" data-subject-value="${esc(s)}">${esc(s)}</button>`).join('')}</div><input value="${esc(o.subject||'')}" data-output-subject="${esc(o.id)}"><label style="margin-top:14px;">Body (editable)</label><textarea data-output-body="${esc(o.id)}">${esc(o.body||'')}</textarea><div style="margin-top:10px;"><button class="btn" data-copy-body="${esc(o.id)}">Copy Body</button> <button class="btn ghost" data-copy-full="${esc(o.id)}">Copy Subject + Body</button></div></div></div>`;
+    }
+
+    function makeHistoryEntry(){
+      const now = new Date();
+      const f = state.form;
+      return { id:`${now.toISOString()}-${Math.random().toString(36).slice(2,8)}`, exportedAt:now.toISOString(), challengeType:clean(f.challengeType), challengeTopic:clean(f.challengeTopic), challengeStart:clean(f.challengeStart), challengeEnd:clean(f.challengeEnd), lessonLocation:clean(f.lessonLocation), courseLink:clean(f.courseLink), lessonTopic:clean(f.lessonTopic), lessonLink:clean(f.lessonLink), freebieTopic:clean(f.freebieTopic), freebieLink:clean(f.freebieLink), meetupDate:clean(f.meetupDate), meetupTime:clean(f.meetupTime), outputCount:state.outputs.length };
+    }
+
+    function saveCurrentHistory(){ saveHistoryList([makeHistoryEntry(), ...state.history].slice(0,HISTORY_LIMIT)); state.saved = true; render(); }
+    function getOutput(id){ return state.outputs.find(o => o.id === id); }
+
+    async function generate(){
+      const missing = ALL_FIELDS.filter(f => !clean(state.form[f.id]));
+      if(missing.length){ state.err = `Fill in: ${missing.slice(0,3).map(f=>f.label).join(', ')}${missing.length>3 ? ` +${missing.length-3} more` : ''}`; render(); return; }
+      state.step = 2; state.err = ''; state.progress = 30; state.progressMsg = 'Writing all 8 outputs with one secure OpenAI API call...'; render();
+      try {
+        const resp = await fetch('/api/generate', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ form:state.form }) });
+        const data = await resp.json().catch(()=>({}));
+        if(!resp.ok) throw new Error(data.error || `Generation failed with status ${resp.status}`);
+        if(!Array.isArray(data.outputs) || !data.outputs.length) throw new Error('The API returned no outputs.');
+        state.outputs = data.outputs.map(o => ({ ...o, subject:o.subject || '', body:o.body || '' }));
+      } catch(err){
+        console.error(err);
+        state.outputs = AI_STEPS.map(t => ({ id:t.id, name:t.label, emoji:t.emoji, badge:'AI', subject:'Generation error', subjects:['Generation error'], body:err.message || 'Could not generate. Check Vercel environment variables and try again.' }));
+      }
+      state.step = 3; state.progress = 100; state.saved = false; render();
+    }
+
+    function downloadCsv(){
+      const rows = [['Type','Subject','Body']];
+      state.outputs.forEach(o => rows.push([o.name || o.id, o.subject || '', o.body || '']));
+      const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
+      const blob = new Blob([csv], { type:'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = url; a.download = 'jayme-bass-emails.csv'; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+      saveCurrentHistory();
+    }
+
+    async function copyText(text){ try { await navigator.clipboard.writeText(text); } catch { const ta=document.createElement('textarea'); ta.value=text; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); } }
+
+    function bind(){
+      document.querySelectorAll('[data-nav]').forEach(el => el.onclick = () => setState({ active: el.dataset.nav }));
+      document.querySelectorAll('[data-field]').forEach(el => el.oninput = () => updateForm(el.dataset.field, el.value));
+      const next = document.getElementById('nextBtn'); if(next) next.onclick = () => { const idx = SECTIONS.findIndex(s=>s.id===state.active); setState({ active:SECTIONS[idx+1].id }); };
+      const back = document.getElementById('backBtn'); if(back) back.onclick = () => { const idx = SECTIONS.findIndex(s=>s.id===state.active); setState({ active:SECTIONS[idx-1].id }); };
+      const gen = document.getElementById('generateBtn'); if(gen) gen.onclick = generate;
+      const sel = document.getElementById('freebieSelect'); if(sel) sel.onchange = () => { const f = FREEBIES.find(x=>x.name===sel.value); if(f){ state.form.freebieTopic=f.name; state.form.freebieLink=f.url; render(); } };
+      document.querySelectorAll('[data-freebie]').forEach(el => el.onclick = () => { const f = FREEBIES.find(x=>x.name===el.dataset.freebie); if(f){ state.form.freebieTopic=f.name; state.form.freebieLink=f.url; render(); } });
+      const clear = document.getElementById('clearHistory'); if(clear) clear.onclick = () => { if(confirm('Clear all saved history?')) { saveHistoryList([]); render(); } };
+      document.querySelectorAll('[data-delete-history]').forEach(el => el.onclick = () => { saveHistoryList(state.history.filter(x=>x.id!==el.dataset.deleteHistory)); render(); });
+      document.querySelectorAll('[data-load-history]').forEach(el => el.onclick = () => { const e = state.history.find(x=>x.id===el.dataset.loadHistory); if(e){ state.form = { ...state.form, challengeType:e.challengeType||'', challengeTopic:e.challengeTopic||'', challengeStart:e.challengeStart||'', challengeEnd:e.challengeEnd||'', lessonLocation:e.lessonLocation||'', courseLink:e.courseLink||'', lessonTopic:e.lessonTopic||'', lessonLink:e.lessonLink||'', freebieTopic:e.freebieTopic||'', freebieLink:e.freebieLink||'', meetupDate:e.meetupDate||'', meetupTime:e.meetupTime||'' }; state.active='challenge'; render(); } });
+      document.querySelectorAll('[data-output-card]').forEach(el => el.querySelector('.output-head').onclick = () => setState({ openOutput: state.openOutput===el.dataset.outputCard ? null : el.dataset.outputCard }));
+      document.querySelectorAll('[data-output-subject]').forEach(el => el.oninput = () => { const o=getOutput(el.dataset.outputSubject); if(o) o.subject = el.value; });
+      document.querySelectorAll('[data-output-body]').forEach(el => el.oninput = () => { const o=getOutput(el.dataset.outputBody); if(o) o.body = el.value; });
+      document.querySelectorAll('[data-subject]').forEach(el => el.onclick = (ev) => { ev.stopPropagation(); const o=getOutput(el.dataset.subject); if(o){ o.subject=el.dataset.subjectValue; render(); } });
+      document.querySelectorAll('[data-copy-body]').forEach(el => el.onclick = () => { const o=getOutput(el.dataset.copyBody); copyText(o?.body || ''); });
+      document.querySelectorAll('[data-copy-full]').forEach(el => el.onclick = () => { const o=getOutput(el.dataset.copyFull); copyText(`SUBJECT: ${o?.subject || ''}\n\n${o?.body || ''}`); });
+      const dl = document.getElementById('downloadCsv'); if(dl) dl.onclick = downloadCsv;
+      const sh = document.getElementById('saveHist'); if(sh) sh.onclick = saveCurrentHistory;
+      const reset = document.getElementById('resetBtn'); if(reset) reset.onclick = () => setState({ step:1, outputs:[], saved:false });
+    }
+
+    function render(){ app.innerHTML = state.step === 1 ? renderForm() : state.step === 2 ? renderProgress() : renderOutputs(); bind(); }
+
+    window.addEventListener('error', (e) => {
+      app.innerHTML = `<div class="wrap"><div class="panel"><h1>App error</h1><p>${esc(e.message || 'Unknown browser error')}</p><button class="btn primary" onclick="location.reload()">Reload</button></div></div>`;
+    });
+
+    render();
+  </script>
+</body>
+</html>
