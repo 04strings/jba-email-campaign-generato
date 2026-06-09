@@ -25,6 +25,23 @@ const FIXED = {
   meetupRoom: 'https://www.jaymelewis.com/products/communities/v2/community922853/live',
 };
 
+const FREEBIES = [
+  { name: 'Top 50', url: 'https://s3.amazonaws.com/kajabi-storefronts-production/file-uploads/sites/2147954607/downloads/481f6d6-572-11fa-edde-12a14db2844_Jayme_s_Favorite_Basslines_Licks.pdf' },
+  { name: 'Practice Toolkit', url: 'https://www.jaymelewis.com/jaymes-free-practice-toolkit' },
+  { name: 'Arpeggio Playbook', url: 'https://www.jaymelewis.com/arpeggio-playbook' },
+  { name: 'Bassics 101', url: 'https://www.jaymelewis.com/thebassics101' },
+  { name: 'Reading Cheat Sheet', url: 'https://s3.amazonaws.com/kajabi-storefronts-production/file-uploads/sites/2147954607/downloads/7cdde6-62c1-032-0428-bcdf45a5b5_Sheet_Happens.pdf' },
+  { name: 'Fretboard Fast-Track', url: 'https://www.jaymelewis.com/jayme-s-free-fretboard-fast-track' },
+  { name: '30 Free Lessons', url: 'https://www.jaymelewis.com/blog' },
+  { name: 'Tone Guide', url: 'https://s3.amazonaws.com/kajabi-storefronts-production/file-uploads/sites/2147954607/themes/2160539597/downloads/505386c-fca-461-c3c3-4ad0c80f1ba_Jayme_s_Tone_Guide.pdf' },
+  { name: 'Must-Have Bass Gear', url: 'https://www.jaymelewis.com/blog/jayme-s-gear-recommendations' },
+  { name: 'Ear Training', url: 'https://s3.amazonaws.com/kajabi-storefronts-production/file-uploads/sites/2147954607/downloads/6070226-a675-fb7-8fd-e2556fba3b8_Jayme_s_Ear_Training_Guide.pdf' },
+  { name: 'How to Groove with Drummer', url: 'https://s3.amazonaws.com/kajabi-storefronts-production/file-uploads/sites/2147954607/downloads/c670a01-245-60b-38c-bb088c2e8151_Listen_to_your_Drummer.pdf' },
+];
+
+const HISTORY_KEY = 'jba-email-campaign-history-v1';
+const HISTORY_LIMIT = 60;
+
 const SECTIONS = [
   {
     id: 'challenge', label: 'Monthly Challenge', icon: '🏆',
@@ -50,20 +67,24 @@ const SECTIONS = [
   {
     id: 'freebie', label: 'Freebie', icon: '🎁',
     fields: [
-      { id: 'freebieTopic', label: 'Freebie Name or Description', ph: 'e.g. 5-Day Groove Challenge', wide: true },
+      { id: 'freebieTopic', label: 'Freebie Name or Description', ph: 'e.g. Practice Toolkit', wide: true },
       { id: 'freebieLink',  label: 'Freebie URL',          ph: 'https://www.jaymelewis.com/...', wide: true },
     ],
   },
   {
-    id: 'events', label: 'Events', icon: '📅',
+    id: 'meetup', label: 'Meetup', icon: '📅',
     fields: [
       { id: 'meetupDate', label: 'Next Meetup Date', type: 'date' },
       { id: 'meetupTime', label: 'Meetup Time (PT)',    ph: 'e.g. 2:00 PM' },
     ],
   },
+  {
+    id: 'history', label: 'History', icon: '🕘',
+    fields: [],
+  },
 ];
 
-const ALL_FIELDS = SECTIONS.flatMap(s => s.fields);
+const ALL_FIELDS = SECTIONS.filter(s => s.id !== 'history').flatMap(s => s.fields);
 const AI_STEPS = [
   { id: 'challenge_email', label: 'Challenge Email', emoji: '🏆' },
   { id: 'lesson_email',    label: 'New Lesson Email', emoji: '📚' },
@@ -100,7 +121,190 @@ const pillStyle = (active) => ({
   transition: 'all 0.15s',
 });
 
-function FormStep({ form, setForm, onGenerate }) {
+
+const cleanText = (value) => String(value || '').trim();
+
+function loadHistory() {
+  if (typeof window === 'undefined') return [];
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(HISTORY_KEY) || '[]');
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeHistory(nextHistory) {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(HISTORY_KEY, JSON.stringify(nextHistory));
+}
+
+function makeHistoryEntry(form = {}, outputs = []) {
+  const now = new Date();
+  return {
+    id: `${now.toISOString()}-${Math.random().toString(36).slice(2, 8)}`,
+    exportedAt: now.toISOString(),
+    challengeType: cleanText(form.challengeType),
+    challengeTopic: cleanText(form.challengeTopic),
+    challengeStart: cleanText(form.challengeStart),
+    challengeEnd: cleanText(form.challengeEnd),
+    lessonLocation: cleanText(form.lessonLocation),
+    courseLink: cleanText(form.courseLink),
+    lessonTopic: cleanText(form.lessonTopic),
+    lessonLink: cleanText(form.lessonLink),
+    freebieTopic: cleanText(form.freebieTopic),
+    freebieLink: cleanText(form.freebieLink),
+    meetupDate: cleanText(form.meetupDate),
+    meetupTime: cleanText(form.meetupTime),
+    outputCount: Array.isArray(outputs) ? outputs.length : 0,
+  };
+}
+
+function formatDate(value) {
+  if (!value) return '—';
+  const d = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return value;
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function formatDateTime(value) {
+  if (!value) return '—';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return value;
+  return d.toLocaleString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
+}
+
+function FreebieLibrary({ form, setForm }) {
+  const choose = (freebie) => {
+    setForm(prev => ({ ...prev, freebieTopic: freebie.name, freebieLink: freebie.url }));
+  };
+
+  const selectedValue = FREEBIES.find(f => f.name === form.freebieTopic && f.url === form.freebieLink)?.name || '';
+
+  return (
+    <div style={{ gridColumn: 'span 2', background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 14 }}>
+      <label style={labelStyle}>Choose from saved freebies</label>
+      <select
+        value={selectedValue}
+        onChange={e => {
+          const freebie = FREEBIES.find(item => item.name === e.target.value);
+          if (freebie) choose(freebie);
+        }}
+        style={{ ...inputStyle, cursor: 'pointer', marginBottom: 12 }}
+        onFocus={e => e.target.style.borderColor = C.borderFocus}
+        onBlur={e => e.target.style.borderColor = C.border}
+      >
+        <option value="">Pick a freebie...</option>
+        {FREEBIES.map(freebie => <option key={freebie.name} value={freebie.name}>{freebie.name}</option>)}
+      </select>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 8 }}>
+        {FREEBIES.map(freebie => {
+          const active = form.freebieTopic === freebie.name && form.freebieLink === freebie.url;
+          return (
+            <button key={freebie.name} type="button" onClick={() => choose(freebie)} style={{
+              textAlign: 'left', padding: '9px 10px', borderRadius: 8, cursor: 'pointer',
+              border: `1px solid ${active ? C.accent : C.border}`,
+              background: active ? C.accentSoft : C.surface,
+              color: active ? C.accentText : C.text,
+              fontSize: 12, fontWeight: 600, ...sans,
+            }}>
+              {freebie.name}
+              <div style={{ marginTop: 3, color: C.muted, fontSize: 10, fontWeight: 400, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {freebie.url}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function HistorySection({ history, onDeleteHistory, onClearHistory, onUseHistoryEntry }) {
+  return (
+    <div style={{ background: C.surface, borderRadius: 14, border: `1px solid ${C.border}`, padding: 22, marginBottom: 20 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
+        <div>
+          <h2 style={{ color: C.text, fontSize: 18, margin: '0 0 6px' }}>Previous Export History</h2>
+          <p style={{ color: C.muted, fontSize: 13, margin: 0, lineHeight: 1.6 }}>
+            Every CSV download is saved here so you can see the last challenge, lesson, freebie, and meetup before scheduling the next month.
+          </p>
+        </div>
+        {history.length > 0 && (
+          <button type="button" onClick={onClearHistory} style={{
+            padding: '8px 12px', borderRadius: 8, border: `1px solid ${C.border}`,
+            background: 'transparent', color: C.danger, fontSize: 12, cursor: 'pointer', ...sans,
+          }}>
+            Clear History
+          </button>
+        )}
+      </div>
+
+      {history.length === 0 ? (
+        <div style={{ padding: 18, background: C.card, border: `1px dashed ${C.border}`, borderRadius: 10, color: C.muted, fontSize: 13, lineHeight: 1.7 }}>
+          No exports saved yet. Generate a campaign and click “Download CSV + Save History” to start tracking what you used.
+        </div>
+      ) : (
+        <div style={{ display: 'grid', gap: 10 }}>
+          {history.map((entry, index) => (
+            <div key={entry.id} style={{ background: C.card, border: `1px solid ${index === 0 ? C.accent : C.border}`, borderRadius: 12, padding: 14 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 10 }}>
+                <div>
+                  <div style={{ ...mono, fontSize: 10, color: index === 0 ? C.accentText : C.muted, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                    {index === 0 ? 'Most recent export' : 'Saved export'} · {formatDateTime(entry.exportedAt)}
+                  </div>
+                  <div style={{ color: C.text, fontSize: 14, fontWeight: 700, marginTop: 4 }}>
+                    {entry.challengeType || 'Challenge'}: {entry.challengeTopic || '—'}
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button type="button" onClick={() => onUseHistoryEntry(entry)} style={{
+                    padding: '7px 11px', borderRadius: 8, border: `1px solid ${C.border}`,
+                    background: C.surface, color: C.text, fontSize: 12, cursor: 'pointer', ...sans,
+                  }}>
+                    Load Into Form
+                  </button>
+                  <button type="button" onClick={() => onDeleteHistory(entry.id)} style={{
+                    padding: '7px 11px', borderRadius: 8, border: `1px solid ${C.border}`,
+                    background: 'transparent', color: C.muted, fontSize: 12, cursor: 'pointer', ...sans,
+                  }}>
+                    Delete
+                  </button>
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 8, fontSize: 12, lineHeight: 1.55 }}>
+                <div style={{ padding: 10, borderRadius: 8, background: C.surface }}>
+                  <div style={labelStyle}>Challenge</div>
+                  <div style={{ color: C.text }}>{entry.challengeType || '—'} · {entry.challengeTopic || '—'}</div>
+                  <div style={{ color: C.muted, fontSize: 11 }}>{formatDate(entry.challengeStart)} → {formatDate(entry.challengeEnd)}</div>
+                </div>
+                <div style={{ padding: 10, borderRadius: 8, background: C.surface }}>
+                  <div style={labelStyle}>Lesson</div>
+                  <div style={{ color: C.text }}>{entry.lessonTopic || entry.lessonLocation || '—'}</div>
+                  <div style={{ color: C.muted, fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{entry.lessonLink || entry.courseLink || '—'}</div>
+                </div>
+                <div style={{ padding: 10, borderRadius: 8, background: C.surface }}>
+                  <div style={labelStyle}>Freebie</div>
+                  <div style={{ color: C.text }}>{entry.freebieTopic || '—'}</div>
+                  <div style={{ color: C.muted, fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{entry.freebieLink || '—'}</div>
+                </div>
+                <div style={{ padding: 10, borderRadius: 8, background: C.surface }}>
+                  <div style={labelStyle}>Meetup</div>
+                  <div style={{ color: C.text }}>{formatDate(entry.meetupDate)}</div>
+                  <div style={{ color: C.muted, fontSize: 11 }}>{entry.meetupTime || '—'} PT</div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function FormStep({ form, setForm, onGenerate, history, onDeleteHistory, onClearHistory, onUseHistoryEntry }) {
   const [activeSection, setActiveSection] = useState('challenge');
   const [errMsg, setErrMsg] = useState('');
   const sIdx = SECTIONS.findIndex(s => s.id === activeSection);
@@ -144,52 +348,65 @@ function FormStep({ form, setForm, onGenerate }) {
         ))}
       </div>
 
-      <div style={{ background: C.surface, borderRadius: 14, border: `1px solid ${C.border}`, padding: 22, marginBottom: 20 }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-          {section.fields.map(f => (
-            <div key={f.id} style={{ gridColumn: f.wide ? 'span 2' : 'span 1' }}>
-              <label style={labelStyle}>{f.label}</label>
-              {f.type === 'select' ? (
-                <select
-                  value={form[f.id] || ''}
-                  onChange={e => update(f.id, e.target.value)}
-                  style={{ ...inputStyle, cursor: 'pointer' }}
-                  onFocus={e => e.target.style.borderColor = C.borderFocus}
-                  onBlur={e => e.target.style.borderColor = C.border}
-                >
-                  <option value="" disabled>Select one...</option>
-                  {f.options.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-                </select>
-              ) : (
-                f.type === 'date' ? (
-                  <input
-                    type="date"
+      {section.id === 'history' ? (
+        <HistorySection
+          history={history}
+          onDeleteHistory={onDeleteHistory}
+          onClearHistory={onClearHistory}
+          onUseHistoryEntry={(entry) => {
+            onUseHistoryEntry(entry);
+            setActiveSection('challenge');
+          }}
+        />
+      ) : (
+        <div style={{ background: C.surface, borderRadius: 14, border: `1px solid ${C.border}`, padding: 22, marginBottom: 20 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+            {section.id === 'freebie' && <FreebieLibrary form={form} setForm={setForm} />}
+            {section.fields.map(f => (
+              <div key={f.id} style={{ gridColumn: f.wide ? 'span 2' : 'span 1' }}>
+                <label style={labelStyle}>{f.label}</label>
+                {f.type === 'select' ? (
+                  <select
                     value={form[f.id] || ''}
                     onChange={e => update(f.id, e.target.value)}
-                    style={{
-                      ...inputStyle,
-                      cursor: 'pointer',
-                      colorScheme: 'dark',
-                    }}
+                    style={{ ...inputStyle, cursor: 'pointer' }}
+                    onFocus={e => e.target.style.borderColor = C.borderFocus}
+                    onBlur={e => e.target.style.borderColor = C.border}
+                  >
+                    <option value="" disabled>Select one...</option>
+                    {f.options.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                  </select>
+                ) : (
+                  f.type === 'date' ? (
+                    <input
+                      type="date"
+                      value={form[f.id] || ''}
+                      onChange={e => update(f.id, e.target.value)}
+                      style={{
+                        ...inputStyle,
+                        cursor: 'pointer',
+                        colorScheme: 'dark',
+                      }}
+                      onFocus={e => e.target.style.borderColor = C.borderFocus}
+                      onBlur={e => e.target.style.borderColor = C.border}
+                    />
+                  ) : (
+                  <input
+                    type="text"
+                    value={form[f.id] || ''}
+                    onChange={e => update(f.id, e.target.value)}
+                    placeholder={f.ph}
+                    style={{ ...inputStyle }}
                     onFocus={e => e.target.style.borderColor = C.borderFocus}
                     onBlur={e => e.target.style.borderColor = C.border}
                   />
-                ) : (
-                <input
-                  type="text"
-                  value={form[f.id] || ''}
-                  onChange={e => update(f.id, e.target.value)}
-                  placeholder={f.ph}
-                  style={{ ...inputStyle }}
-                  onFocus={e => e.target.style.borderColor = C.borderFocus}
-                  onBlur={e => e.target.style.borderColor = C.border}
-                />
-                )
-              )}
-            </div>
-          ))}
+                  )
+                )}
+              </div>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
         <div style={{ display: 'flex', gap: 8 }}>
@@ -207,13 +424,15 @@ function FormStep({ form, setForm, onGenerate }) {
           )}
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          {errMsg && <span style={{ fontSize: 12, color: C.danger }}>{errMsg}</span>}
-          <button onClick={handleGenerate}
-            style={{ padding: '11px 22px', borderRadius: 8, border: 'none', background: C.accent, color: '#000', fontSize: 13, fontWeight: 700, cursor: 'pointer', ...sans }}>
-            ⚡ Generate All 8 Outputs
-          </button>
-        </div>
+        {section.id !== 'history' && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            {errMsg && <span style={{ fontSize: 12, color: C.danger }}>{errMsg}</span>}
+            <button onClick={handleGenerate}
+              style={{ padding: '11px 22px', borderRadius: 8, border: 'none', background: C.accent, color: '#000', fontSize: 13, fontWeight: 700, cursor: 'pointer', ...sans }}>
+              ⚡ Generate All 8 Outputs
+            </button>
+          </div>
+        )}
       </div>
 
       <div style={{ display: 'flex', justifyContent: 'center', gap: 7, marginTop: 28 }}>
@@ -260,7 +479,7 @@ function ProgressStep({ progress, progressMsg }) {
             </div>
           ))}
         </div>
-        <p style={{ color: C.dim, fontSize: 11, ...mono }}>One Anthropic API call for all 8 outputs...</p>
+        <p style={{ color: C.dim, fontSize: 11, ...mono }}>One secure OpenAI API call for all 8 outputs...</p>
       </div>
     </div>
   );
@@ -380,11 +599,17 @@ function OutputCard({ output, openId, setOpenId, editableOutputs, setEditableOut
   );
 }
 
-function OutputsStep({ outputs, onReset }) {
+function OutputsStep({ outputs, form, onReset, onSaveHistory }) {
   const [openId, setOpenId] = useState(null);
   const [editableOutputs, setEditableOutputs] = useState(
     Object.fromEntries(outputs.map(o => [o.id, { subject: o.subject, body: o.body }]))
   );
+  const [historySaved, setHistorySaved] = useState(false);
+
+  const saveHistory = () => {
+    if (onSaveHistory) onSaveHistory(form, outputs);
+    setHistorySaved(true);
+  };
 
   const downloadCSV = () => {
     const rows = [['Type', 'Subject', 'Body']];
@@ -402,6 +627,7 @@ function OutputsStep({ outputs, onReset }) {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+    saveHistory();
   };
 
   const emailOutputs = outputs.slice(0, 3);
@@ -425,7 +651,13 @@ function OutputsStep({ outputs, onReset }) {
             padding: '8px 15px', borderRadius: 8, border: `1px solid ${C.border}`,
             background: C.surface, color: C.text, fontSize: 12, cursor: 'pointer', ...sans,
           }}>
-            ↓ Download CSV
+            ↓ Download CSV + Save History
+          </button>
+          <button onClick={saveHistory} style={{
+            padding: '8px 15px', borderRadius: 8, border: `1px solid ${historySaved ? C.success : C.border}`,
+            background: historySaved ? 'rgba(16,185,129,0.12)' : 'transparent', color: historySaved ? C.success : C.text, fontSize: 12, cursor: 'pointer', ...sans,
+          }}>
+            {historySaved ? '✓ Saved' : 'Save to History'}
           </button>
           <button onClick={onReset} style={{
             padding: '8px 15px', borderRadius: 8, border: `1px solid ${C.border}`,
@@ -479,6 +711,7 @@ export default function App() {
   const [outputs, setOutputs] = useState([]);
   const [progress, setProgress] = useState(0);
   const [progressMsg, setProgressMsg] = useState('');
+  const [history, setHistory] = useState([]);
 
   useEffect(() => {
     const id = 'jba-fonts';
@@ -490,6 +723,47 @@ export default function App() {
       document.head.appendChild(link);
     }
   }, []);
+
+  useEffect(() => {
+    setHistory(loadHistory());
+  }, []);
+
+  const persistHistory = (nextHistory) => {
+    setHistory(nextHistory);
+    writeHistory(nextHistory);
+  };
+
+  const handleSaveHistory = (currentForm, currentOutputs) => {
+    const entry = makeHistoryEntry(currentForm, currentOutputs);
+    const next = [entry, ...history].slice(0, HISTORY_LIMIT);
+    persistHistory(next);
+  };
+
+  const handleDeleteHistory = (id) => {
+    persistHistory(history.filter(entry => entry.id !== id));
+  };
+
+  const handleClearHistory = () => {
+    persistHistory([]);
+  };
+
+  const handleUseHistoryEntry = (entry) => {
+    setForm(prev => ({
+      ...prev,
+      challengeType: entry.challengeType || '',
+      challengeTopic: entry.challengeTopic || '',
+      challengeStart: entry.challengeStart || '',
+      challengeEnd: entry.challengeEnd || '',
+      lessonLocation: entry.lessonLocation || '',
+      courseLink: entry.courseLink || '',
+      lessonTopic: entry.lessonTopic || '',
+      lessonLink: entry.lessonLink || '',
+      freebieTopic: entry.freebieTopic || '',
+      freebieLink: entry.freebieLink || '',
+      meetupDate: entry.meetupDate || '',
+      meetupTime: entry.meetupTime || '',
+    }));
+  };
 
   const handleGenerate = async () => {
     setStep(2);
@@ -537,7 +811,7 @@ export default function App() {
     }
   };
 
-  if (step === 1) return <FormStep form={form} setForm={setForm} onGenerate={handleGenerate} />;
+  if (step === 1) return <FormStep form={form} setForm={setForm} onGenerate={handleGenerate} history={history} onDeleteHistory={handleDeleteHistory} onClearHistory={handleClearHistory} onUseHistoryEntry={handleUseHistoryEntry} />;
   if (step === 2) return <ProgressStep progress={progress} progressMsg={progressMsg} />;
-  return <OutputsStep outputs={outputs} onReset={() => { setStep(1); setOutputs([]); }} />;
+  return <OutputsStep outputs={outputs} form={form} onSaveHistory={handleSaveHistory} onReset={() => { setStep(1); setOutputs([]); }} />;
 }

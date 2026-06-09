@@ -10,6 +10,9 @@ This version makes **one server-side OpenAI API call** for all 8 outputs. The AP
 - Keeps the OpenAI API key private in Vercel.
 - Lets you edit each result in the browser.
 - Lets you copy individual outputs or download the CSV.
+- Adds a Meetup section in the top nav instead of Events.
+- Adds a History section that saves previous CSV exports in the browser so you can avoid repeating the same challenge, lesson, freebie, or meetup month-to-month.
+- Adds a built-in freebie picker with Jayme's main freebies and links.
 
 ## Deploy to Vercel
 
