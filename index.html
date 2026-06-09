@@ -135,6 +135,37 @@
     function saveHistoryList(list){ state.history = list; localStorage.setItem(HISTORY_KEY, JSON.stringify(list)); }
     function fmtDate(value){ if(!value) return '—'; const d = new Date(value + 'T00:00:00'); return isNaN(d) ? value : d.toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'}); }
     function fmtDateTime(value){ if(!value) return '—'; const d = new Date(value); return isNaN(d) ? value : d.toLocaleString(undefined,{month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'}); }
+    function pad2(n){ return String(n).padStart(2,'0'); }
+    function parseMeetupTime(value){
+      const raw = clean(value).toLowerCase().replace(/\./g,'').replace(/\s+/g,' ').trim();
+      const m = raw.match(/^(\d{1,2})(?::(\d{2}))?\s*(am|pm)?$/);
+      if(!m) return null;
+      let hour = Number(m[1]);
+      const minute = Number(m[2] || 0);
+      const meridiem = m[3];
+      if(minute > 59 || hour > 23) return null;
+      if(meridiem === 'pm' && hour < 12) hour += 12;
+      if(meridiem === 'am' && hour === 12) hour = 0;
+      if(meridiem && hour > 23) return null;
+      return { hour, minute };
+    }
+    function calendarStamp(d){ return `${d.getFullYear()}${pad2(d.getMonth()+1)}${pad2(d.getDate())}T${pad2(d.getHours())}${pad2(d.getMinutes())}00`; }
+    function buildMeetupCalendarUrl(){
+      if(!clean(state.form.meetupDate)) return null;
+      const parts = state.form.meetupDate.split('-').map(Number);
+      const parsedTime = parseMeetupTime(state.form.meetupTime || '');
+      if(!parsedTime) return 'INVALID_TIME';
+      const start = new Date(parts[0], parts[1]-1, parts[2], parsedTime.hour, parsedTime.minute, 0);
+      const end = new Date(start.getTime() + 60 * 60 * 1000);
+      const params = new URLSearchParams({
+        action: 'TEMPLATE',
+        text: 'JBA Live Meetup',
+        dates: `${calendarStamp(start)}/${calendarStamp(end)}`,
+        ctz: 'America/Los_Angeles',
+        details: `Jayme's Bass Academy live meetup.\n\nGenerated from the JBA Email Campaign Generator.`
+      });
+      return `https://calendar.google.com/calendar/render?${params.toString()}`;
+    }
     function updateForm(id, val){ state.form[id] = val; }
     function setState(patch){ state = { ...state, ...patch }; render(); }
 
@@ -200,8 +231,9 @@
         meetup: 'Past 3 Used Meetups from History'
       };
       if(!items.length){
-        const kajabiButton = sectionId === 'challenge' ? `<div class="panel" style="margin-top:-10px;"><a class="btn primary" href="https://app.kajabi.com/admin/products/2148433202" target="_blank" rel="noopener noreferrer" style="display:inline-block;text-decoration:none;">KAJABI - PREVIOUS CHALLENGES</a></div>` : '';
-        return `<div class="panel"><h2>${esc(titles[sectionId] || 'Past 3 Used from History')}</h2><div class="history-item" style="border-style:dashed;color:var(--muted);">No saved history yet.</div></div>${kajabiButton}`;
+        const kajabiButton = sectionId === 'challenge' ? `<div class="panel" style="margin-top:-10px;"><div class="row" style="justify-content:flex-start;"><a class="btn primary" href="https://app.kajabi.com/admin/products/2148433202" target="_blank" rel="noopener noreferrer" style="display:inline-block;text-decoration:none;">KAJABI - PREVIOUS CHALLENGES</a><a class="btn primary" href="https://app.kajabi.com/admin/sites/2147954607/courses" target="_blank" rel="noopener noreferrer" style="display:inline-block;text-decoration:none;">KAJABI COURSES</a></div></div>` : '';
+        const calendarButton = sectionId === 'meetup' ? `<div class="panel" style="margin-top:-10px;"><div class="row" style="justify-content:flex-start;"><a class="btn primary" href="https://calendar.google.com/calendar/u/0/r" target="_blank" rel="noopener noreferrer" style="display:inline-block;text-decoration:none;">CALENDAR</a><button class="btn primary" id="scheduleMeetupBtn">SCHEDULE MEETUP ON CALENDAR</button></div><p style="margin-bottom:0;">Use the schedule button after entering the meetup date and time. It opens a Google Calendar event set to Pacific Time.</p></div>` : '';
+        return `<div class="panel"><h2>${esc(titles[sectionId] || 'Past 3 Used from History')}</h2><div class="history-item" style="border-style:dashed;color:var(--muted);">No saved history yet.</div></div>${kajabiButton}${calendarButton}`;
       }
       function card(entry){
         if(sectionId === 'challenge'){
@@ -218,8 +250,9 @@
         }
         return '';
       }
-      const kajabiButton = sectionId === 'challenge' ? `<div class="panel" style="margin-top:-10px;"><a class="btn primary" href="https://app.kajabi.com/admin/products/2148433202" target="_blank" rel="noopener noreferrer" style="display:inline-block;text-decoration:none;">KAJABI - PREVIOUS CHALLENGES</a></div>` : '';
-      return `<div class="panel"><h2>${esc(titles[sectionId] || 'Past 3 Used from History')}</h2><p>Use this as a quick reminder so you do not repeat last month’s picks.</p><div class="mini-grid">${items.map(card).join('')}</div></div>${kajabiButton}`;
+      const kajabiButton = sectionId === 'challenge' ? `<div class="panel" style="margin-top:-10px;"><div class="row" style="justify-content:flex-start;"><a class="btn primary" href="https://app.kajabi.com/admin/products/2148433202" target="_blank" rel="noopener noreferrer" style="display:inline-block;text-decoration:none;">KAJABI - PREVIOUS CHALLENGES</a><a class="btn primary" href="https://app.kajabi.com/admin/sites/2147954607/courses" target="_blank" rel="noopener noreferrer" style="display:inline-block;text-decoration:none;">KAJABI COURSES</a></div></div>` : '';
+      const calendarButton = sectionId === 'meetup' ? `<div class="panel" style="margin-top:-10px;"><div class="row" style="justify-content:flex-start;"><a class="btn primary" href="https://calendar.google.com/calendar/u/0/r" target="_blank" rel="noopener noreferrer" style="display:inline-block;text-decoration:none;">CALENDAR</a><button class="btn primary" id="scheduleMeetupBtn">SCHEDULE MEETUP ON CALENDAR</button></div><p style="margin-bottom:0;">Use the schedule button after entering the meetup date and time. It opens a Google Calendar event set to Pacific Time.</p></div>` : '';
+      return `<div class="panel"><h2>${esc(titles[sectionId] || 'Past 3 Used from History')}</h2><p>Use this as a quick reminder so you do not repeat last month’s picks.</p><div class="mini-grid">${items.map(card).join('')}</div></div>${kajabiButton}${calendarButton}`;
     }
 
     function renderHistoryPanel(){
@@ -306,6 +339,7 @@
       const clear = document.getElementById('clearHistory'); if(clear) clear.onclick = () => { if(confirm('Clear all saved history?')) { saveHistoryList([]); render(); } };
       document.querySelectorAll('[data-delete-history]').forEach(el => el.onclick = () => { saveHistoryList(state.history.filter(x=>x.id!==el.dataset.deleteHistory)); render(); });
       document.querySelectorAll('[data-load-history]').forEach(el => el.onclick = () => { const e = state.history.find(x=>x.id===el.dataset.loadHistory); if(e){ state.form = { ...state.form, challengeType:e.challengeType||'', challengeTopic:e.challengeTopic||'', challengeStart:e.challengeStart||'', challengeEnd:e.challengeEnd||'', lessonLocation:e.lessonLocation||'', courseLink:e.courseLink||'', lessonTopic:e.lessonTopic||'', lessonLink:e.lessonLink||'', freebieTopic:e.freebieTopic||'', freebieLink:e.freebieLink||'', meetupDate:e.meetupDate||'', meetupTime:e.meetupTime||'' }; state.active='challenge'; render(); } });
+      const scheduleMeetup = document.getElementById('scheduleMeetupBtn'); if(scheduleMeetup) scheduleMeetup.onclick = () => { const url = buildMeetupCalendarUrl(); if(!url){ alert('Add a meetup date first.'); return; } if(url === 'INVALID_TIME'){ alert('Use a meetup time like 2:00 PM.'); return; } window.open(url, '_blank', 'noopener,noreferrer'); };
       document.querySelectorAll('[data-output-card]').forEach(el => el.querySelector('.output-head').onclick = () => setState({ openOutput: state.openOutput===el.dataset.outputCard ? null : el.dataset.outputCard }));
       document.querySelectorAll('[data-output-subject]').forEach(el => el.oninput = () => { const o=getOutput(el.dataset.outputSubject); if(o) o.subject = el.value; });
       document.querySelectorAll('[data-output-body]').forEach(el => el.oninput = () => { const o=getOutput(el.dataset.outputBody); if(o) o.body = el.value; });
