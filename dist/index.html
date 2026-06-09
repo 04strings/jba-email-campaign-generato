@@ -106,10 +106,7 @@
         { id:'lessonTopic', label:'New Lesson Description', ph:'e.g. Slap Bass Fundamentals', wide:true },
         { id:'lessonLink', label:'New Lesson URL', ph:'https://www.jaymelewis.com/...', wide:true }
       ]},
-      { id:'freebie', label:'Freebie', icon:'🎁', fields:[
-        { id:'freebieTopic', label:'Freebie Name or Description', ph:'e.g. Practice Toolkit', wide:true },
-        { id:'freebieLink', label:'Freebie URL', ph:'https://www.jaymelewis.com/...', wide:true }
-      ]},
+      { id:'freebie', label:'Freebie', icon:'🎁', fields:[]},
       { id:'meetup', label:'Meetup', icon:'📅', fields:[
         { id:'meetupDate', label:'Next Meetup Date', type:'date' },
         { id:'meetupTime', label:'Meetup Time (PT)', ph:'e.g. 2:00 PM' }
@@ -151,10 +148,13 @@
 
     function nav(){ return `<div class="nav">${SECTIONS.map(s => `<button class="pill ${state.active===s.id?'active':''}" data-nav="${s.id}">${s.icon} ${s.label}</button>`).join('')}</div>`; }
 
-    function freebieLibrary(){ return `
+    function freebieLibrary(){
+      const selected = FREEBIES.find(f => f.name === state.form.freebieTopic) || (state.form.freebieTopic || state.form.freebieLink ? { name: state.form.freebieTopic, url: state.form.freebieLink } : null);
+      return `
       <div class="freebie-box">
         <label>Choose from saved freebies</label>
         <select id="freebieSelect"><option value="">Pick a freebie...</option>${FREEBIES.map(f => `<option value="${esc(f.name)}" ${state.form.freebieTopic===f.name?'selected':''}>${esc(f.name)}</option>`).join('')}</select>
+        ${selected ? `<div class="mini-card" style="margin-top:10px;"><label>Selected Freebie</label><div>${esc(selected.name || '—')}</div><div class="url">${esc(selected.url || '—')}</div></div>` : ''}
         <div class="freebie-grid">${FREEBIES.map(f => {
           const active = state.form.freebieTopic === f.name && state.form.freebieLink === f.url;
           return `<button class="freebie-btn ${active?'active':''}" data-freebie="${esc(f.name)}">${esc(f.name)}<div class="url">${esc(f.url)}</div></button>`;
@@ -177,8 +177,9 @@
       const idx = SECTIONS.findIndex(s => s.id === state.active);
       const section = SECTIONS[idx] || SECTIONS[0];
       const err = state.err ? `<span class="error">${esc(state.err)}</span>` : '';
+      const recent = ['challenge','lesson','freebie','meetup'].includes(section.id) ? renderRecentHistoryPanel(section.id) : '';
       const content = section.id === 'history' ? renderHistoryPanel() : `
-        <div class="panel"><div class="grid">${section.id==='freebie' ? freebieLibrary() : ''}${section.fields.map(formField).join('')}</div></div>`;
+        <div class="panel"><div class="grid">${section.id==='freebie' ? freebieLibrary() : ''}${section.fields.map(formField).join('')}</div></div>${recent}`;
       return shell(`${nav()}${content}
         <div class="row">
           <div>
@@ -188,6 +189,35 @@
           ${section.id !== 'history' ? `<div class="row">${err}<button class="btn primary" id="generateBtn">⚡ Generate All 8 Outputs</button></div>` : ''}
         </div>
         <div class="steps">${SECTIONS.map(s => `<div class="step-dot ${state.active===s.id?'active':''}" data-nav="${s.id}"></div>`).join('')}</div>`);
+    }
+
+    function renderRecentHistoryPanel(sectionId){
+      const items = state.history.slice(0,3);
+      const titles = {
+        challenge: 'Past 3 Used Challenges from History',
+        lesson: 'Past 3 Used New Lessons from History',
+        freebie: 'Past 3 Used Freebies from History',
+        meetup: 'Past 3 Used Meetups from History'
+      };
+      if(!items.length){
+        return `<div class="panel"><h2>${esc(titles[sectionId] || 'Past 3 Used from History')}</h2><div class="history-item" style="border-style:dashed;color:var(--muted);">No saved history yet.</div></div>`;
+      }
+      function card(entry){
+        if(sectionId === 'challenge'){
+          return `<div class="mini-card"><label>Challenge</label><div><b>${esc(entry.challengeType || '—')}</b></div><div>${esc(entry.challengeTopic || '—')}</div></div>`;
+        }
+        if(sectionId === 'lesson'){
+          return `<div class="mini-card"><label>New Lesson</label><div>${esc(entry.lessonTopic || entry.lessonLocation || '—')}</div><div class="url">${esc(entry.lessonLink || entry.courseLink || '—')}</div></div>`;
+        }
+        if(sectionId === 'freebie'){
+          return `<div class="mini-card"><label>Freebie</label><div><b>${esc(entry.freebieTopic || '—')}</b></div><div class="url">${esc(entry.freebieLink || '—')}</div></div>`;
+        }
+        if(sectionId === 'meetup'){
+          return `<div class="mini-card"><label>Meetup</label><div>${esc(fmtDate(entry.meetupDate))}</div><div class="url">${esc(entry.meetupTime || '—')} PT</div></div>`;
+        }
+        return '';
+      }
+      return `<div class="panel"><h2>${esc(titles[sectionId] || 'Past 3 Used from History')}</h2><p>Use this as a quick reminder so you do not repeat last month’s picks.</p><div class="mini-grid">${items.map(card).join('')}</div></div>`;
     }
 
     function renderHistoryPanel(){
@@ -235,6 +265,7 @@
 
     async function generate(){
       const missing = ALL_FIELDS.filter(f => !clean(state.form[f.id]));
+      if(!clean(state.form.freebieTopic) || !clean(state.form.freebieLink)) missing.push({ label:'Choose a saved freebie' });
       if(missing.length){ state.err = `Fill in: ${missing.slice(0,3).map(f=>f.label).join(', ')}${missing.length>3 ? ` +${missing.length-3} more` : ''}`; render(); return; }
       state.step = 2; state.err = ''; state.progress = 30; state.progressMsg = 'Writing all 8 outputs with one secure OpenAI API call...'; render();
       try {
