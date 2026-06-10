@@ -75,6 +75,11 @@
     const CURRENCY = null;
     const HISTORY_KEY = 'jba-email-campaign-history-v1';
     const HISTORY_LIMIT = 60;
+    const CSV_FILENAME = 'JBA Newsletter.csv';
+    const DESIRED_CSV_FOLDER = 'G:\\My Drive\\JBA Content Files\\Newsletter CSV';
+    const CSV_FOLDER_NAME_KEY = 'jba-newsletter-csv-folder-name';
+    const CSV_DIR_DB = 'jba-newsletter-csv-folder-db';
+    const CSV_DIR_STORE = 'handles';
 
     const FREEBIES = [
       { name: 'Top 50', url: 'https://s3.amazonaws.com/kajabi-storefronts-production/file-uploads/sites/2147954607/downloads/481f6d6-572-11fa-edde-12a14db2844_Jayme_s_Favorite_Basslines_Licks.pdf' },
@@ -111,6 +116,7 @@
         { id:'meetupDate', label:'Next Meetup Date', type:'date' },
         { id:'meetupTime', label:'Meetup Time (PT)', ph:'e.g. 2:00 PM' }
       ]},
+      { id:'schedule', label:'Schedule', icon:'🗓️', fields:[] },
       { id:'history', label:'History', icon:'🕘', fields:[] }
     ];
 
@@ -127,7 +133,7 @@
 
     const ALL_FIELDS = SECTIONS.filter(s => s.id !== 'history').flatMap(s => s.fields);
     const app = document.getElementById('app');
-    let state = { step:1, active:'challenge', form:{}, outputs:[], history:loadHistory(), openOutput:null, saved:false };
+    let state = { step:1, active:'challenge', form:{}, outputs:[], history:loadHistory(), openOutput:null, saved:false, csvFolderName:localStorage.getItem(CSV_FOLDER_NAME_KEY) || '', csvStatus:'' };
 
     function esc(v){ return String(v ?? '').replace(/[&<>'"]/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[ch])); }
     function clean(v){ return String(v || '').trim(); }
@@ -169,6 +175,65 @@
     function updateForm(id, val){ state.form[id] = val; }
     function setState(patch){ state = { ...state, ...patch }; render(); }
 
+    function scheduleFieldId(outputId){ return `schedule_${outputId}`; }
+    function openCsvDb(){
+      return new Promise((resolve, reject) => {
+        const req = indexedDB.open(CSV_DIR_DB, 1);
+        req.onupgradeneeded = () => { if(!req.result.objectStoreNames.contains(CSV_DIR_STORE)) req.result.createObjectStore(CSV_DIR_STORE); };
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+      });
+    }
+    async function saveCsvDirectoryHandle(handle){
+      const db = await openCsvDb();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(CSV_DIR_STORE, 'readwrite');
+        tx.objectStore(CSV_DIR_STORE).put(handle, 'directory');
+        tx.oncomplete = resolve;
+        tx.onerror = () => reject(tx.error);
+      });
+    }
+    async function getCsvDirectoryHandle(){
+      const db = await openCsvDb();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(CSV_DIR_STORE, 'readonly');
+        const req = tx.objectStore(CSV_DIR_STORE).get('directory');
+        req.onsuccess = () => resolve(req.result || null);
+        req.onerror = () => reject(req.error);
+      });
+    }
+    async function chooseCsvFolder(){
+      if(!('showDirectoryPicker' in window)){
+        alert('This browser cannot save directly to a chosen folder. Use Chrome or Edge, or set your browser download folder to ' + DESIRED_CSV_FOLDER + '.');
+        return;
+      }
+      try {
+        const handle = await window.showDirectoryPicker({ id:'jba-newsletter-csv-folder', mode:'readwrite' });
+        await saveCsvDirectoryHandle(handle);
+        localStorage.setItem(CSV_FOLDER_NAME_KEY, handle.name || 'Selected folder');
+        state.csvFolderName = handle.name || 'Selected folder';
+        state.csvStatus = 'CSV folder selected. Future exports will save as ' + CSV_FILENAME + ' there when permission is available.';
+        render();
+      } catch(err){
+        if(err && err.name !== 'AbortError') alert('Could not choose the folder: ' + (err.message || err));
+      }
+    }
+    async function writeCsvToSelectedFolder(csv){
+      if(!('showDirectoryPicker' in window)) return false;
+      const handle = await getCsvDirectoryHandle();
+      if(!handle) return false;
+      if(handle.queryPermission && handle.requestPermission){
+        let permission = await handle.queryPermission({ mode:'readwrite' });
+        if(permission !== 'granted') permission = await handle.requestPermission({ mode:'readwrite' });
+        if(permission !== 'granted') return false;
+      }
+      const fileHandle = await handle.getFileHandle(CSV_FILENAME, { create:true });
+      const writable = await fileHandle.createWritable();
+      await writable.write(csv);
+      await writable.close();
+      return true;
+    }
+
     function shell(inner){ return `
       <div class="wrap">
         <div class="eyebrow mono"><span class="dot"></span> Jayme's Bass Academy</div>
@@ -209,7 +274,7 @@
       const section = SECTIONS[idx] || SECTIONS[0];
       const err = state.err ? `<span class="error">${esc(state.err)}</span>` : '';
       const recent = ['challenge','lesson','freebie','meetup'].includes(section.id) ? renderRecentHistoryPanel(section.id) : '';
-      const content = section.id === 'history' ? renderHistoryPanel() : `
+      const content = section.id === 'history' ? renderHistoryPanel() : section.id === 'schedule' ? renderSchedulePanel() : `
         <div class="panel"><div class="grid">${section.id==='freebie' ? freebieLibrary() : ''}${section.fields.map(formField).join('')}</div></div>${recent}`;
       return shell(`${nav()}${content}
         <div class="row">
@@ -255,6 +320,18 @@
       return `<div class="panel"><h2>${esc(titles[sectionId] || 'Past 3 Used from History')}</h2><p>Use this as a quick reminder so you do not repeat last month’s picks.</p><div class="mini-grid">${items.map(card).join('')}</div></div>${kajabiButton}${calendarButton}`;
     }
 
+    function renderSchedulePanel(){
+      const folderStatus = state.csvFolderName ? `Selected folder: <b>${esc(state.csvFolderName)}</b>` : 'No CSV folder selected yet.';
+      return `<div class="panel">
+        <div class="row" style="margin-bottom:14px;"><div><h2>Schedule</h2><p>Choose the day each generated email or announcement should go out. These dates are added to the CSV.</p></div></div>
+        <div class="note"><b style="color:var(--text);">CSV save target:</b> ${esc(DESIRED_CSV_FOLDER)}<br>${folderStatus}<br><span style="color:var(--muted);">Because this runs in a browser, click “Choose CSV Folder” once and select that Google Drive folder. After that, supported browsers will save exports as <b>${esc(CSV_FILENAME)}</b> in that folder. If folder saving is blocked, the app will download the file with the same filename.</span></div>
+        <div class="row" style="justify-content:flex-start;margin-bottom:18px;"><button class="btn primary" id="chooseCsvFolderBtn">Choose CSV Folder</button></div>
+        <div class="grid">
+          ${AI_STEPS.map(item => `<div><label>${esc(item.label)} Send Date</label><input type="date" value="${esc(state.form[scheduleFieldId(item.id)] || '')}" data-field="${esc(scheduleFieldId(item.id))}"></div>`).join('')}
+        </div>
+      </div>`;
+    }
+
     function renderHistoryPanel(){
       if(!state.history.length){
         return `<div class="panel"><div class="row"><div><h2>Previous Export History</h2><p>Every CSV download is saved here so you can see the last challenge, lesson, freebie, and meetup before scheduling the next month.</p></div></div><div class="history-item" style="border-style:dashed;color:var(--muted);">No exports saved yet. Generate a campaign and click “Download CSV + Save History” to start tracking what you used.</div></div>`;
@@ -280,7 +357,8 @@
     function renderOutputs(){
       const emailOutputs = state.outputs.slice(0,3);
       const annOutputs = state.outputs.slice(3);
-      return `<div class="wrap"><div class="row" style="margin-bottom:22px;"><div><div class="eyebrow mono" style="color:var(--success);"><span class="dot" style="background:var(--success);"></span> 8 outputs ready</div><h2>Your Emails & Announcements</h2><p>All editable. Click any card to expand, copy, and paste into Kajabi.</p></div><div><button class="btn" id="downloadCsv">↓ Download CSV + Save History</button> <button class="btn ${state.saved?'':'ghost'}" id="saveHist">${state.saved?'✓ Saved':'Save to History'}</button> <button class="btn ghost" id="resetBtn">Edit & Regenerate</button></div></div><div class="note"><b style="color:var(--text);">Getting into Kajabi:</b> <span style="color:var(--accent-text);">Emails</span> → Marketing → Emails → Broadcasts → Create Broadcast → paste Subject + Body. <span style="color:var(--accent-text);">Announcements</span> → paste into Community posts or Library lesson pages.</div><div class="mono" style="font-size:10px;color:var(--muted);letter-spacing:.09em;text-transform:uppercase;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--border);">⚡ AI-Generated Emails — send to subscribers</div>${emailOutputs.map(outputCard).join('')}<div class="mono" style="font-size:10px;color:var(--muted);letter-spacing:.09em;text-transform:uppercase;margin:22px 0 10px;padding-bottom:8px;border-bottom:1px solid var(--border);">⚡ AI-Generated Announcements & Posts</div>${annOutputs.map(outputCard).join('')}</div>`;
+      const csvStatus = state.csvStatus ? `<div class="note">${esc(state.csvStatus)}</div>` : '';
+      return `<div class="wrap"><div class="row" style="margin-bottom:22px;"><div><div class="eyebrow mono" style="color:var(--success);"><span class="dot" style="background:var(--success);"></span> 8 outputs ready</div><h2>Your Emails & Announcements</h2><p>All editable. Click any card to expand, copy, and paste into Kajabi.</p></div><div><button class="btn" id="downloadCsv">↓ Save JBA Newsletter CSV + Save History</button> <button class="btn ${state.saved?'':'ghost'}" id="saveHist">${state.saved?'✓ Saved':'Save to History'}</button> <button class="btn ghost" id="resetBtn">Edit & Regenerate</button></div></div>${csvStatus}<div class="note"><b style="color:var(--text);">Getting into Kajabi:</b> <span style="color:var(--accent-text);">Emails</span> → Marketing → Emails → Broadcasts → Create Broadcast → paste Subject + Body. <span style="color:var(--accent-text);">Announcements</span> → paste into Community posts or Library lesson pages.</div><div class="mono" style="font-size:10px;color:var(--muted);letter-spacing:.09em;text-transform:uppercase;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--border);">⚡ AI-Generated Emails — send to subscribers</div>${emailOutputs.map(outputCard).join('')}<div class="mono" style="font-size:10px;color:var(--muted);letter-spacing:.09em;text-transform:uppercase;margin:22px 0 10px;padding-bottom:8px;border-bottom:1px solid var(--border);">⚡ AI-Generated Announcements & Posts</div>${annOutputs.map(outputCard).join('')}</div>`;
     }
 
     function outputCard(o){
@@ -292,7 +370,7 @@
     function makeHistoryEntry(){
       const now = new Date();
       const f = state.form;
-      return { id:`${now.toISOString()}-${Math.random().toString(36).slice(2,8)}`, exportedAt:now.toISOString(), challengeType:clean(f.challengeType), challengeTopic:clean(f.challengeTopic), challengeStart:clean(f.challengeStart), challengeEnd:clean(f.challengeEnd), lessonLocation:clean(f.lessonLocation), courseLink:clean(f.courseLink), lessonTopic:clean(f.lessonTopic), lessonLink:clean(f.lessonLink), freebieTopic:clean(f.freebieTopic), freebieLink:clean(f.freebieLink), meetupDate:clean(f.meetupDate), meetupTime:clean(f.meetupTime), outputCount:state.outputs.length };
+      return { id:`${now.toISOString()}-${Math.random().toString(36).slice(2,8)}`, exportedAt:now.toISOString(), challengeType:clean(f.challengeType), challengeTopic:clean(f.challengeTopic), challengeStart:clean(f.challengeStart), challengeEnd:clean(f.challengeEnd), lessonLocation:clean(f.lessonLocation), courseLink:clean(f.courseLink), lessonTopic:clean(f.lessonTopic), lessonLink:clean(f.lessonLink), freebieTopic:clean(f.freebieTopic), freebieLink:clean(f.freebieLink), meetupDate:clean(f.meetupDate), meetupTime:clean(f.meetupTime), schedules:AI_STEPS.reduce((acc,item)=>{ acc[item.id]=clean(f[scheduleFieldId(item.id)]); return acc; }, {}), outputCount:state.outputs.length };
     }
 
     function saveCurrentHistory(){ saveHistoryList([makeHistoryEntry(), ...state.history].slice(0,HISTORY_LIMIT)); state.saved = true; render(); }
@@ -316,13 +394,24 @@
       state.step = 3; state.progress = 100; state.saved = false; render();
     }
 
-    function downloadCsv(){
-      const rows = [['Type','Subject','Body']];
-      state.outputs.forEach(o => rows.push([o.name || o.id, o.subject || '', o.body || '']));
-      const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
+    function downloadFallback(csv){
       const blob = new Blob([csv], { type:'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
-      const a = document.createElement('a'); a.href = url; a.download = 'jayme-bass-emails.csv'; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+      const a = document.createElement('a'); a.href = url; a.download = CSV_FILENAME; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+    }
+
+    async function downloadCsv(){
+      const rows = [['Scheduled Date','Type','Subject','Body']];
+      state.outputs.forEach(o => rows.push([state.form[scheduleFieldId(o.id)] || '', o.name || o.id, o.subject || '', o.body || '']));
+      const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
+      let wroteToFolder = false;
+      try { wroteToFolder = await writeCsvToSelectedFolder(csv); } catch(err){ console.warn('Folder save failed, using browser download.', err); }
+      if(wroteToFolder){
+        state.csvStatus = `Saved ${CSV_FILENAME} to the selected CSV folder.`;
+      } else {
+        downloadFallback(csv);
+        state.csvStatus = `Downloaded ${CSV_FILENAME}. To save directly to ${DESIRED_CSV_FOLDER}, open Schedule → Choose CSV Folder and select that folder in Chrome or Edge.`;
+      }
       saveCurrentHistory();
     }
 
@@ -334,11 +423,12 @@
       const next = document.getElementById('nextBtn'); if(next) next.onclick = () => { const idx = SECTIONS.findIndex(s=>s.id===state.active); setState({ active:SECTIONS[idx+1].id }); };
       const back = document.getElementById('backBtn'); if(back) back.onclick = () => { const idx = SECTIONS.findIndex(s=>s.id===state.active); setState({ active:SECTIONS[idx-1].id }); };
       const gen = document.getElementById('generateBtn'); if(gen) gen.onclick = generate;
+      const chooseFolder = document.getElementById('chooseCsvFolderBtn'); if(chooseFolder) chooseFolder.onclick = chooseCsvFolder;
       const sel = document.getElementById('freebieSelect'); if(sel) sel.onchange = () => { const f = FREEBIES.find(x=>x.name===sel.value); if(f){ state.form.freebieTopic=f.name; state.form.freebieLink=f.url; render(); } };
       document.querySelectorAll('[data-freebie]').forEach(el => el.onclick = () => { const f = FREEBIES.find(x=>x.name===el.dataset.freebie); if(f){ state.form.freebieTopic=f.name; state.form.freebieLink=f.url; render(); } });
       const clear = document.getElementById('clearHistory'); if(clear) clear.onclick = () => { if(confirm('Clear all saved history?')) { saveHistoryList([]); render(); } };
       document.querySelectorAll('[data-delete-history]').forEach(el => el.onclick = () => { saveHistoryList(state.history.filter(x=>x.id!==el.dataset.deleteHistory)); render(); });
-      document.querySelectorAll('[data-load-history]').forEach(el => el.onclick = () => { const e = state.history.find(x=>x.id===el.dataset.loadHistory); if(e){ state.form = { ...state.form, challengeType:e.challengeType||'', challengeTopic:e.challengeTopic||'', challengeStart:e.challengeStart||'', challengeEnd:e.challengeEnd||'', lessonLocation:e.lessonLocation||'', courseLink:e.courseLink||'', lessonTopic:e.lessonTopic||'', lessonLink:e.lessonLink||'', freebieTopic:e.freebieTopic||'', freebieLink:e.freebieLink||'', meetupDate:e.meetupDate||'', meetupTime:e.meetupTime||'' }; state.active='challenge'; render(); } });
+      document.querySelectorAll('[data-load-history]').forEach(el => el.onclick = () => { const e = state.history.find(x=>x.id===el.dataset.loadHistory); if(e){ state.form = { ...state.form, challengeType:e.challengeType||'', challengeTopic:e.challengeTopic||'', challengeStart:e.challengeStart||'', challengeEnd:e.challengeEnd||'', lessonLocation:e.lessonLocation||'', courseLink:e.courseLink||'', lessonTopic:e.lessonTopic||'', lessonLink:e.lessonLink||'', freebieTopic:e.freebieTopic||'', freebieLink:e.freebieLink||'', meetupDate:e.meetupDate||'', meetupTime:e.meetupTime||'' }; if(e.schedules){ AI_STEPS.forEach(item => { state.form[scheduleFieldId(item.id)] = e.schedules[item.id] || ''; }); } state.active='challenge'; render(); } });
       const scheduleMeetup = document.getElementById('scheduleMeetupBtn'); if(scheduleMeetup) scheduleMeetup.onclick = () => { const url = buildMeetupCalendarUrl(); if(!url){ alert('Add a meetup date first.'); return; } if(url === 'INVALID_TIME'){ alert('Use a meetup time like 2:00 PM.'); return; } window.open(url, '_blank', 'noopener,noreferrer'); };
       document.querySelectorAll('[data-output-card]').forEach(el => el.querySelector('.output-head').onclick = () => setState({ openOutput: state.openOutput===el.dataset.outputCard ? null : el.dataset.outputCard }));
       document.querySelectorAll('[data-output-subject]').forEach(el => el.oninput = () => { const o=getOutput(el.dataset.outputSubject); if(o) o.subject = el.value; });
